@@ -33,6 +33,7 @@ import (
 // Here is a real implementation of device-plugin.
 type Converter struct {
 	logger           hclog.Logger
+	// ConfigMaps For fast searching
 	ModelIdMap       map[string]ds.Model
 	DeviceIdMap      map[string]ds.Device
 	FeatureIdMap     map[string]ds.Feature
@@ -54,8 +55,12 @@ func (c *Converter) ConvertReportMessage2Devices(modelId, featureId string) ([]s
 func (c *Converter) ConvertIssueMessage2Device(deviceId, modelId, featureId string, values map[string]string) ([]string, []string, string, string, error) {
 	if values != nil {
 		for _, value := range values {
-			c.logger.Info("type = %s\n", c.InputParamIdMap[featureId].RegistryType)
 			switch c.InputParamIdMap[featureId].RegistryType {
+			// Single holding registry length is 16bit, so first need to convert the values to multiple of 16 bit.
+			// If len of value longer than num of holding registry * 16 bits, then keep the values shorter than num of holding registry * 16 bits.
+			// If len of value shorter than num of holding registry * 16 bits, compensation zero to reach num of holding registry * 16 bits.
+			// Coil registry length is 8bit, and others as the same as holding registry.
+			// Here is a example explain how it works.
 			case "holding registry":
 				bytes := make([]byte, c.InputParamIdMap[featureId].RegistryNum*2)
 				for i := 0; i < int(c.InputParamIdMap[featureId].RegistryNum*2); i++ {
@@ -90,7 +95,8 @@ func (c *Converter) ConvertIssueMessage2Device(deviceId, modelId, featureId stri
 
 // ConvertDeviceMessages2MQFormat receives device command issue responses and converts it to RabbitMQ normative format.
 func (c *Converter) ConvertDeviceMessages2MQFormat(messages []string, featureType string) (string, []byte, error) {
-	// TODO: concrete implement
+	// Coil registry length is 8bit, so the length is not enough to convert by binary.BigEndian.Uint16(bytes). So we need to compensation zero to make it to 16bit.
+	// Here is a example explain how it works.
 	if messages != nil && len(messages[0]) > 0 {
 		bytes := []byte(messages[0])
 		if len(messages[0]) == 1 {
